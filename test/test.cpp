@@ -32,7 +32,7 @@ namespace all_tests
 		TEST_METHOD(test_02a)
 		{
 			std::vector<int> v(10);
-			std::generate(v.begin(), v.end(), [n = 0]() mutable {return ++n; });
+			std::iota(v.begin(), v.end(), 1);
 			Assert::AreEqual(10ull, v.size());
 			Assert::IsTrue(std::is_sorted(v.cbegin(), v.cend()));
 			Assert::AreEqual(1, v[0]);
@@ -67,7 +67,7 @@ namespace all_tests
 			std::vector<double> d;
 
 			// TODO: calculate distances from origin (from x and y collections) to new vector
-			std::transform(y.begin(), y.end(), x, std::back_inserter(d), [](int x, int y) {return sqrt(pow(x, 2) + pow(y, 2)); });
+			std::transform(y.begin(), y.end(), x, std::back_inserter(d), [](int x, int y) {return std::hypot(x, y); });
 
 			Assert::AreEqual(3ull, d.size());
 			Assert::AreEqual(5., d[0]);
@@ -90,7 +90,7 @@ namespace all_tests
 		{
 			struct person { std::string name; int age; };
 			std::vector<person> v{ {"Pero", 33}, {"Iva", 25} };
-			auto total_age = std::accumulate(v.begin(), v.end(), 0, [](int sum, person& s) {return sum+=s.age; });
+			auto total_age = std::accumulate(v.begin(), v.end(), 0, [](int sum, const person& s) {return sum+=s.age; });
 			Assert::AreEqual(58, total_age);
 		}
 		
@@ -103,14 +103,14 @@ namespace all_tests
 		TEST_METHOD(test_05b)
 		{
 			std::vector<double> v{ 1.5, 8, -11.23, 0, 1e10, 1e10, 1e10, 0, 99 };
-			auto number_of_invalid = std::count_if(v.begin(), v.end(), [](double n) {return n == 1e10; });
+			auto number_of_invalid = std::count(v.begin(), v.end(), 1e10);
 			Assert::AreEqual(3ll, number_of_invalid);
 		}
 		TEST_METHOD(test_05c)
 		{
 			struct point { int x, y; };
 			std::vector<point> v{ {1,1}, {-5,3}, {2,2}, {-7,-6}, {9,-4} };
-			auto number_in_first_quadrant = std::count_if(v.begin(), v.end(), [](point p) {return p.x >= 0 && p.y >= 0; });
+			auto number_in_first_quadrant = std::count_if(v.begin(), v.end(), [](const point& p) {return p.x >= 0 && p.y >= 0; });
 			Assert::AreEqual(2ll, number_in_first_quadrant);
 		}
 		
@@ -142,17 +142,13 @@ namespace all_tests
 		TEST_METHOD(test_07b)
 		{
 			std::string s("neisporuka");
-			std::for_each(s.begin(), s.end(), [](char& c) {std::string("aeiou").find(c) != -1 ? c = 'x' : c; });
+			std::replace_if(s.begin(), s.end(), [](char& c) { return std::string("aeiou").find(c) != -1; }, 'x');
 			Assert::AreEqual("nxxspxrxkx", s.c_str());
 		}
 		TEST_METHOD(test_08a)
 		{
 			std::vector<double> v{ 1e10, 8, -11.23, 0, 1e10, 1e10, 1e10, 0, 99 };
-			v = [&v]() {
-					std::vector<double> temp;
-					std::copy_if(v.begin(), v.end(), back_inserter(temp), [](double d) {return d != 1e10; });
-					return temp;
-				}();
+			v.erase(std::remove(v.begin(), v.end(), 1e10), v.end());
 			Assert::AreEqual(5ull, v.size());
 			Assert::AreEqual(8., v[0]);
 			Assert::AreEqual(99., v[4]);
@@ -161,11 +157,7 @@ namespace all_tests
 		TEST_METHOD(test_08b)
 		{
 			std::string s("poliuretan");
-			s = [&s]() {
-					std::string temp("");
-					std::for_each(s.begin(), s.end(), [&temp](char c) {if (std::string("aeiou").find(c) == -1) temp.push_back(c); });
-					return temp;
-				}();
+			s.erase(std::remove_if(s.begin(), s.end(), [](const char c) {return std::string("aeiou").find(c) != -1; }), s.end());
 			Assert::AreEqual("plrtn", s.c_str());
 		}
 		
@@ -173,7 +165,7 @@ namespace all_tests
 		{
 			struct exam { std::string name; int points, grade; };
 			std::vector<exam> v{ {"Pero", 55, 2}, {"Iva", 93, 5}, {"Marko", 89, 5} };
-			std::sort(v.begin(), v.end(), [](exam a, exam b) { if (a.grade == b.grade) return (a.points > b.points); return a.grade > b.grade; });
+			std::sort(v.begin(), v.end(), [](const exam& a, const exam& b) { if (a.grade == b.grade) return (a.points > b.points); return a.grade > b.grade; });
 			Assert::AreEqual("Iva", v[0].name.c_str());
 			Assert::AreEqual("Marko", v[1].name.c_str());
 			Assert::AreEqual("Pero", v[2].name.c_str());
@@ -207,19 +199,13 @@ namespace all_tests
 		{
 			std::vector<int> atp_points{ 8445, 7480, 6220, 5300, 5285 };
 			// the most interesting match is the one with the smallest difference
-			auto smallest_difference = [&atp_points]() mutable {
-				std::sort(atp_points.begin(), atp_points.end());
-				std::vector<int> temp;
-				std::transform(atp_points.begin(),
-					atp_points.end() - 1,
-					atp_points.begin() + 1,
-					std::back_inserter(temp),
-					[](int a, int b) {
-						return b - a;
-					});
-
-				return *std::min_element(temp.begin(), temp.end());
-			}();
+			std::vector<int> helperVector;
+			std::adjacent_difference(
+				atp_points.begin(),
+				atp_points.end(),
+				std::back_inserter(helperVector),
+				[](const int a, const int b) {return std::abs(a - b); });
+			int smallest_difference = *std::min_element(helperVector.begin() + 1, helperVector.end());
 
 			Assert::AreEqual(15, smallest_difference);
 		}
